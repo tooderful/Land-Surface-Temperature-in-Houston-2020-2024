@@ -58,29 +58,50 @@ gmoran <- moran.test(harrisR_data$LST, harrisR.rsw,
 
 # Spatial Regression
 sar <- spautolm(LST ~ Patch_Density + Landscape_Shape_Index + FctImp + NDVI +    
-                  PerCover_Forest + grade,listw=harrisR.rsw,data=harrisR_sf) # ERROR with multicollinearity of greenspace ones
-sar <- spautolm(LST ~ FctImp + grade,listw=harrisR.rsw,data=harrisR_sf) # one continuous and grade OK
-sar <- spautolm(LST ~ Patch_Density + Landscape_Shape_Index + FctImp + NDVI +    
-                  PerCover_Forest,listw=harrisR.rsw,data=harrisR_sf) # all continuous and no grade NOT OK
-sar <- spautolm(LST ~ Patch_Density + Landscape_Shape_Index + NDVI +    
-                  PerCover_Forest + grade,listw=harrisR.rsw,data=harrisR_sf) # NOT OK
-sar <- spautolm(LST ~ NDVI + Landscape_Shape_Index + FctImp + grade,listw=harrisR.rsw,data=harrisR_sf) # OK
-sar <- spautolm(LST ~ Landscape_Shape_Index + FctImp + NDVI +    
-                  PerCover_Forest + grade,listw=harrisR.rsw,data=harrisR_sf) # OK
-sar <- spautolm(LST ~ Patch_Density + FctImp + NDVI +    
-                  PerCover_Forest + grade,listw=harrisR.rsw,data=harrisR_sf) # NOT OK
-sar <- spautolm(LST ~ Patch_Density + FctImp + NDVI +    
-                  PerCover_Forest + grade,listw=harrisR.rsw,data=harrisR_sf) # NOT OK
-sar
+                  PerCover_Forest + grade,listw=harrisR.rsw,data=harrisR_sf) # NOT OK --> system is computationally singular
+sar8 <- spautolm(LST ~ FctImp + grade,listw=harrisR.rsw,data=harrisR_sf) # one continuous and grade OK
+# FctImp is 21.0375874
+# gradeB is -408.7690590
+# gradeC is -446.8715241
+# gradeD is -44.4651061
+sar9 <- spautolm(LST ~ Patch_Density + Landscape_Shape_Index + FctImp + NDVI +    
+                  PerCover_Forest,listw=harrisR.rsw,data=harrisR_sf) # NOT OK - no grade --> system is computationally singular
+sar10 <- spautolm(LST ~ Patch_Density + Landscape_Shape_Index + NDVI +    
+                  PerCover_Forest + grade,listw=harrisR.rsw,data=harrisR_sf) # NOT OK - no FctImp --> system is computationally singular
+sar11 <- spautolm(LST ~ NDVI + Landscape_Shape_Index + FctImp + grade,listw=harrisR.rsw,data=harrisR_sf) # OK - no Patch_Density and PerCover_Forest
+# NDVI is -1.101465e-01
+# LSI is -2.615683e-03
+# FctImp is 1.784450e+01
+# gradeB is -3.996837e+02
+# gradeC is -4.710507e+02
+# gradeD is -7.068902e+01
+sar12 <- spautolm(LST ~ Landscape_Shape_Index + FctImp + NDVI +    
+                  PerCover_Forest + grade,listw=harrisR.rsw,data=harrisR_sf) # OK - no Patch_Density
+# LSI is -2.530612e-03
+# FctImp is 1.758736e+01
+# NDVI is -1.054684e-01
+# PerCover_Forest is -2.307867e+03
+# gradeB is -4.119354e+02
+# gradeC is -4.816313e+02
+# gradeD is -8.136159e+01
+sar13 <- spautolm(LST ~ Patch_Density + FctImp + NDVI +    
+                  PerCover_Forest + grade,listw=harrisR.rsw,data=harrisR_sf) # NOT OK - no LSI
+sar14 <- spautolm(LST ~ Landscape_Shape_Index + FctImp + NDVI + PerCover_Forest,
+                  listw=harrisR.rsw,data=harrisR_sf) # OK - no PD and no grade
+# LSI is -2.474076e-03
+# FctImp is 1.755700e+01
+# NDVI is -1.024587e-01
+# PerCover_Forest is -1.964537e+03
 
 # -------------------- HARRIS W/O REDLINING ------------------------------------
 # filter the census blocks for those that are in the harrisFR.csv
 harris_data = read_csv('harrisDataF.csv', show_col_types = FALSE)
+harris_data$Landscape_Shape_Index[is.na(harris_data$Landscape_Shape_Index)] <- 0
 harris_data <- harris_data %>%
   mutate(CTBKEY = as.character(CTBKEY))
 # Join the data frames based on the CTBKEY column
 harris_sf <- tx.sf %>%
-  inner_join(harris_data, by = "CTBKEY")
+  inner_join(harris_data, by = "CTBKEY") # 14371 census blocks
 
 # Defining Spatial Neighbors
 harris.nb <- poly2nb(harris_sf, queen=TRUE) # Queen continuity
@@ -91,7 +112,7 @@ harris.rsw <- nb2mat(harris.nb, style='B', zero.policy = TRUE) # Row standardiza
 # creates a distance matrix between all census blocks
 dist.mat2 <- st_distance(harris_sf)
 # determines which areas have no neighbors
-no.neighbors2 <- which(rowSums(harris.rsw) == 0) # 412
+no.neighbors2 <- which(rowSums(harris.rsw) == 0) # 1388
 
 # determine which areas are closest to these areas
 nearest.area2 <- rep(NA, length(no.neighbors2))
@@ -116,11 +137,30 @@ harris.rsw <- mat2listw(harris.rsw, style='B', zero.policy=TRUE)
 # P-value approach
 gmoran2 <- moran.test(harris_data$LST, harris.rsw, 
                      alternative = 'greater') #  Test for clustering --> the default
-# z-value is the Moran I statistic standard deviate or the Moran I statistics - expectation / squareroot of variance
-z=(8.278723e-01 - (-7.702973e-05))/sqrt(5.993047e-05)
 gmoran2
 # analytical approach for the Global Moran's I test - we reject the null in favor 
 # of the alternative (p-value = 2.2e-16 < \alpha = 0.05). The Moran's I equals 
-# 106.9498, while the expected value is -7.702973e-05. Because the Moran's I value 
+# 9.403676e-01, while the expected value is -6.958942e-05. Because the Moran's I value 
 # is significantly larger than the E(I), there is evidence of some significant 
 # positive spatial auto-correlation and clustering.
+
+# Spatial Regression
+sar <- spautolm(LST ~ Patch_Density + Landscape_Shape_Index + FctImp + NDVI +    
+                  PerCover_Forest,listw=harris.rsw,data=harris_sf) # NOT OK --> system is computationally singular
+sar2 <- spautolm(LST ~ Patch_Density + Landscape_Shape_Index + NDVI +    
+                  PerCover_Forest,listw=harris.rsw,data=harris_sf) # NOT OK - no FctImp --> system is computationally singular
+sar3 <- spautolm(LST ~ NDVI + Landscape_Shape_Index + FctImp,listw=harris.rsw,data=harris_sf) # OK - no Patch Density and PerCoverForest
+# NDVI is -3.340581e-01
+# LSI is 3.668341e-05
+# FctImp is 2.075663e+01
+sar4 <- spautolm(LST ~ Landscape_Shape_Index + FctImp + NDVI +    
+                  PerCover_Forest,listw=harris.rsw,data=harris_sf) # OK - no patch density
+# LSI is 2.682187e-05
+# FctImp is 1.950768e+01
+# NDVI is -3.310703e-01
+# PerCover_Forest is -1.441637e+03
+sar5 <- spautolm(LST ~ Patch_Density + Landscape_Shape_Index + FctImp + NDVI,listw=harris.rsw,data=harris_sf) # NOT OK - no PerCoverForest --> system is computationally singular
+sar6 <- spautolm(LST ~ Patch_Density + FctImp + NDVI +    
+                  PerCover_Forest,listw=harris.rsw,data=harris_sf) # NOT OK - no LSI --> system is computationally singular
+sar7 <- spautolm(LST ~ Patch_Density + Landscape_Shape_Index + FctImp +    
+                  PerCover_Forest,listw=harris.rsw,data=harris_sf) # NOT OK - no NDVI --> system is computationally singular
